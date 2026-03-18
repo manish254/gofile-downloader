@@ -1,3 +1,4 @@
+
 import argparse
 import fnmatch
 import hashlib
@@ -19,9 +20,6 @@ logging.basicConfig(
 logger = logging.getLogger("GoFile")
 
 
-API_TOKEN = "PASTE_YOUR_API_TOKEN_HERE"  # 🔴 ADD THIS
-
-
 class File:
     def __init__(self, link: str, dest: str):
         self.link = link
@@ -35,19 +33,9 @@ class Downloader:
         self.progress_lock = Lock()
 
     def _get_total_size(self, link):
-        r = requests.get(link, headers=self._headers(), stream=True, allow_redirects=True)
+        r = requests.head(link, headers={"Cookie": f"accountToken={self.token}"})
         r.raise_for_status()
-        size = int(r.headers.get("Content-Length", 0))
-        support_range = "bytes" in r.headers.get("Accept-Ranges", "")
-        return size, support_range
-
-    def _headers(self):
-        return {
-            "Authorization": f"Bearer {self.token}",
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "*/*",
-            "Connection": "keep-alive"
-        }
+        return int(r.headers["Content-Length"]), r.headers.get("Accept-Ranges", "none") == "bytes"
 
     def _download_range(self, link, start, end, temp_file, i):
         existing = os.path.getsize(temp_file) if os.path.exists(temp_file) else 0
@@ -55,10 +43,12 @@ class Downloader:
         if range_start > end:
             return i
 
-        headers = self._headers()
-        headers["Range"] = f"bytes={range_start}-{end}"
+        headers = {
+            "Cookie": f"accountToken={self.token}",
+            "Range": f"bytes={range_start}-{end}"
+        }
 
-        with requests.get(link, headers=headers, stream=True, allow_redirects=True) as r:
+        with requests.get(link, headers=headers, stream=True) as r:
             r.raise_for_status()
             with open(temp_file, "ab") as f:
                 for chunk in r.iter_content(chunk_size=8192):
@@ -100,12 +90,14 @@ class Downloader:
                     desc=f"Downloading {os.path.basename(dest)[:30]}"
                 )
 
-                headers = self._headers()
-                headers["Range"] = f"bytes={downloaded}-"
+                headers = {
+                    "Cookie": f"accountToken={self.token}",
+                    "Range": f"bytes={downloaded}-"
+                }
 
                 os.makedirs(os.path.dirname(dest), exist_ok=True)
 
-                with requests.get(link, headers=headers, stream=True, allow_redirects=True) as r:
+                with requests.get(link, headers=headers, stream=True) as r:
                     r.raise_for_status()
                     with open(temp_file, "ab") as f:
                         for chunk in r.iter_content(chunk_size=8192):
@@ -146,6 +138,7 @@ class Downloader:
                         f.result()
 
                 self.progress_bar.close()
+
                 self._merge_parts(temp_dir, dest, num_threads)
 
         except Exception as e:
@@ -154,28 +147,40 @@ class Downloader:
             logger.error(f"Failed to download: {dest} ({e})")
 
 
-class GoFile:
+class GoFile(metaclass=type):
+    WEBSITE_TOKEN = "4fd6sg89d7s6"
     API = "https://api.gofile.io"
 
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
-            "Authorization": f"Bearer {API_TOKEN}",
             "User-Agent": "Mozilla/5.0",
             "Accept": "application/json",
         })
+        self.token = ""
+
+    def update_token(self):
+        r = self.session.post(f"{self.API}/accounts")
+        data = r.json()
+        if data["status"] != "ok":
+            raise Exception("Failed to get token")
+
+        self.token = data["data"]["token"]
+        self.session.cookies.set("accountToken", self.token)
+        self.session.headers.update({"Authorization": f"Bearer {self.token}"})
+        logger.info(f"Updated token: {self.token}")
 
     def get_files_api(self, content_id, password=None):
-        url = f"{self.API}/contents/{content_id}"
+        self.update_token()
 
-        params = {}
+        url = f"{self.API}/contents/{content_id}?cache=true&sortField=createTime&sortDirection=1"
         if password:
-            params["password"] = hashlib.sha256(password.encode()).hexdigest()
+            url += f"&password={hashlib.sha256(password.encode()).hexdigest()}"
 
-        r = self.session.get(url, params=params)
+        r = self.session.get(url, headers={"X-Website-Token": self.WEBSITE_TOKEN})
         data = r.json()
 
-        if data.get("status") != "ok":
+        if data["status"] != "ok":
             raise Exception(f"API error: {data}")
 
         return data["data"]
@@ -189,6 +194,7 @@ class GoFile:
                 out.append(File(data["link"], os.path.join(base_dir, name)))
             return out
 
+        # folder
         folder = os.path.join(base_dir, sanitize_filename(data["name"]))
         for child in data["children"].values():
             out.extend(self.walk(child, folder, includes, excludes))
@@ -214,7 +220,7 @@ class GoFile:
         files = self.walk(data, dir, includes or [], excludes or [])
 
         for f in files:
-            Downloader(API_TOKEN).download(f, num_threads)
+            Downloader(self.token).download(f, num_threads)
 
 
 if __name__ == "__main__":
@@ -246,3 +252,4 @@ if __name__ == "__main__":
         GoFile().execute(dir, url=args.url, password=args.password,
                          proxy=args.proxy, num_threads=threads,
                          includes=args.includes, excludes=args.excludes)
+
