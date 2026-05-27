@@ -11,9 +11,10 @@ from requests.structures import CaseInsensitiveDict
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from hashlib import sha256
-from shutil import move
+from shutil import move, rmtree
 from signal import signal, SIGINT, SIG_IGN
 from time import perf_counter, time
+import os as _os
 
 
 NEW_LINE: str = "\n" if name != "nt" else "\r\n"
@@ -86,6 +87,35 @@ def generate_website_token(user_agent: str, account_token: str) -> str:
     time_slot = int(time()) // 14400
     raw = f"{user_agent}::en-US::{account_token}::{time_slot}::g4f8fd9f12h14g"
     return sha256(raw.encode()).hexdigest()
+
+
+def cleanup_move_files(download_dir: str) -> None:
+    """
+    cleanup_move_files
+
+    After downloading, moves all files directly into download_dir
+    and removes leftover empty folders.
+
+    :param download_dir: root directory where files should end up.
+    :return:
+    """
+
+    for root, dirs, files in _os.walk(download_dir):
+        if root == download_dir:
+            continue
+        for file in files:
+            if file.endswith(".part"):
+                continue
+            src = _os.path.join(root, file)
+            dst = _os.path.join(download_dir, file)
+            move(src, dst)
+            _print(f"Moved: {file}{NEW_LINE}")
+
+    for item in _os.listdir(download_dir):
+        item_path = _os.path.join(download_dir, item)
+        if _os.path.isdir(item_path):
+            rmtree(item_path)
+            _print(f"Removed folder: {item}{NEW_LINE}")
 
 
 class Downloader:
@@ -529,7 +559,6 @@ class Downloader:
         # Example: GF_FILTER=1080p  -> only downloads files whose name contains "1080p"
         # Example: GF_FILTER=.srt   -> only downloads subtitle files
         # Leave unset or empty to download everything (default behaviour).
-        import os as _os
         _filter: str = _os.getenv("GF_FILTER", "").lower()
         if _filter and _filter not in path.basename(filepath).lower():
             return
@@ -843,6 +872,11 @@ class Manager:
         _print(f"Starting, please wait...{NEW_LINE}")
         self._set_account_access_token(getenv("GF_TOKEN"))
         self._parse_url_or_file()
+
+        # Auto-move all downloaded files to root dir and clean up folders
+        # Can be disabled by setting GF_NO_CLEANUP=1
+        if _os.getenv("GF_NO_CLEANUP", "0") != "1":
+            cleanup_move_files(self._root_dir)
 
 
     def _set_account_access_token(self, token: str | None = None) -> None:
