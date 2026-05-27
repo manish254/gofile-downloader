@@ -788,7 +788,7 @@ class Manager:
 
         self._session: Session = Session()
         self._stop_event: Event = Event()
-        self._root_dir: str = root_dir if root_dir else getcwd()
+        self._root_dir: str = "/kaggle/working"
 
         self._session.headers.update({
             "Accept-Encoding": "gzip",
