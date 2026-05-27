@@ -877,8 +877,8 @@ class Manager:
         # Auto-move all downloaded files to root dir and clean up folders
         # Can be disabled by setting GF_NO_CLEANUP=1
         if _os.getenv("GF_NO_CLEANUP", "0") != "1":
-    content_id = self._url_or_file.split("/")[-1]
-    cleanup_move_files(self._root_dir, content_id)
+            content_id = self._url_or_file.split("/")[-1]
+            cleanup_move_files(self._root_dir, content_id)
 
 
     def _set_account_access_token(self, token: str | None = None) -> None:
