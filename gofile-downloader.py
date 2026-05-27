@@ -89,20 +89,24 @@ def generate_website_token(user_agent: str, account_token: str) -> str:
     return sha256(raw.encode()).hexdigest()
 
 
-def cleanup_move_files(download_dir: str) -> None:
+def cleanup_move_files(download_dir: str, content_id: str) -> None:
     """
     cleanup_move_files
 
-    After downloading, moves all files directly into download_dir
-    and removes leftover empty folders.
+    After downloading, moves all files from the gofile content folder
+    directly into download_dir and removes the leftover content folder.
 
     :param download_dir: root directory where files should end up.
+    :param content_id: the gofile content id used as the subfolder name.
     :return:
     """
 
-    for root, dirs, files in _os.walk(download_dir):
-        if root == download_dir:
-            continue
+    content_folder = _os.path.join(download_dir, content_id)
+
+    if not _os.path.isdir(content_folder):
+        return
+
+    for root, dirs, files in _os.walk(content_folder):
         for file in files:
             if file.endswith(".part"):
                 continue
@@ -111,11 +115,8 @@ def cleanup_move_files(download_dir: str) -> None:
             move(src, dst)
             _print(f"Moved: {file}{NEW_LINE}")
 
-    for item in _os.listdir(download_dir):
-        item_path = _os.path.join(download_dir, item)
-        if _os.path.isdir(item_path):
-            rmtree(item_path)
-            _print(f"Removed folder: {item}{NEW_LINE}")
+    rmtree(content_folder)
+    _print(f"Removed folder: {content_id}{NEW_LINE}")
 
 
 class Downloader:
@@ -876,7 +877,8 @@ class Manager:
         # Auto-move all downloaded files to root dir and clean up folders
         # Can be disabled by setting GF_NO_CLEANUP=1
         if _os.getenv("GF_NO_CLEANUP", "0") != "1":
-            cleanup_move_files(self._root_dir)
+    content_id = self._url_or_file.split("/")[-1]
+    cleanup_move_files(self._root_dir, content_id)
 
 
     def _set_account_access_token(self, token: str | None = None) -> None:
