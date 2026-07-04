@@ -21,14 +21,6 @@ NEW_LINE: str = "\n" if name != "nt" else "\r\n"
 
 
 def has_ansi_support() -> bool:
-    """
-    has_ansi_support
-
-    Checks whether the platform support ansi or not.
-
-    :return: True if the platform supports it.
-    """
-
     import os
     import sys
 
@@ -36,44 +28,21 @@ def has_ansi_support() -> bool:
         return False
 
     if os.name == "nt":
-        # Not sure, but I think the console on win10+ have default ansi support
         return sys.getwindowsversion().major >= 10
 
-    # I hope the rest supports it??
     return True
 
 
-# I hope these 100 character are enough for fallback,
-# anyone using win7 still?
 TERMINAL_CLEAR_LINE: str = f"\r{' ' * 100} \r" if not has_ansi_support() else "\033[2K\r"
 
 
 def _print(msg: str, error: bool = False) -> None:
-    """
-    _print
-
-    Print a message.
-
-    :param msg: a string to be printed.
-    :param error: if the error stream output should be used instead of the standard output.
-    :return:
-    """
-
     output: TextIO = stderr if error else stdout
     output.write(msg)
     output.flush()
 
 
 def die(msg: str) -> NoReturn:
-    """
-    die
-
-    Display a message of error and exit.
-
-    :param msg: a string to be printed.
-    :return:
-    """
-
     _print(f"{msg}{NEW_LINE}", True)
     exit(-1)
 
@@ -85,7 +54,7 @@ def generate_website_token(user_agent: str, account_token: str) -> str:
     Generates the dynamic X-Website-Token required by GoFile API.
     """
     time_slot = int(time()) // 14400
-    raw = f"{user_agent}::en-US::{account_token}::{time_slot}::g4f8fd9f12h14g"
+    raw = f"{user_agent}::en-US::{account_token}::{time_slot}::9844d94d963d30"
     return sha256(raw.encode()).hexdigest()
 
 
@@ -133,30 +102,7 @@ class Downloader:
         url: str,
         password: str | None = None,
     ) -> None:
-        """
-        Downloader
-
-        Downloader class to concurrently manage, download and write files to disk.
-        This one does the heavy lifting, the actual working of downloading.
-
-        :root_dir: Directory where files will be saved (defaults to current directory).
-        :interactive: Whether download will be interactive or not
-                      (it's disabled by default while batch downloading from a text file)
-        :max_workers: Maximum number of concurrent workers (tasks).
-        :number_retries: The maximum number of connections retries for POST and GET requests.
-        :timeout: Maximum number of time to wait until give up on trying to establish a connection.
-        :chunk_size: Maximum chunk byte size.
-        :stop_event: An Event object to handle the request to stop the program and exit gracefully.
-        :session: Session object to handle headers, cookies and allowing reuse of resources and TCP connections.
-        :url: The content url to download.
-        :password: The content password if it's protected.
-        """
-
-        # Dictionary to hold information about file and its directories structure
-        # {"index": {"path": "", "filename": "", "link": ""}}
-        # where the largest index is the top most file
         self._files_info: dict[str, dict[str, str]] = {}
-
         self._max_workers: int = max_workers
         self._number_retries: int = number_retries
         self._timeout: float = timeout
@@ -170,14 +116,6 @@ class Downloader:
 
 
     def run(self) -> None:
-        """
-        run
-
-        Requests to start downloading files.
-
-        :return:
-        """
-
         try:
             if not self._url.split("/")[-2] == "d":
                 _print(f"The url probably doesn't have an id in it: {self._url}.{NEW_LINE}")
@@ -193,7 +131,6 @@ class Downloader:
         content_dir: str = path.join(self._root_dir, content_id)
         self._build_content_tree_structure(content_dir, content_id, _password)
 
-        # removes the root content directory if there's no file or subdirectory
         if path.exists(content_dir) and not listdir(content_dir) and not self._files_info:
             _print(f"Empty directory for url: {self._url}, nothing done.{NEW_LINE}")
             self._remove_dir(content_dir)
@@ -206,15 +143,6 @@ class Downloader:
 
 
     def _get_response(self, **kwargs: Any) -> Response | None:
-        """
-        _get_response
-
-        Auxiliary function for the requests.session.get.
-
-        :param kwargs: arguments for the requests.session.get function.
-        :return: requests.Response or None on requests.Timeout.
-        """
-
         for _ in range(self._number_retries):
             try:
                 return self._session.get(timeout=self._timeout, **kwargs)
@@ -223,14 +151,6 @@ class Downloader:
 
 
     def _threaded_downloads(self) -> None:
-        """
-        _threaded_downloads
-
-        Parallelize the downloads.
-
-        :return:
-        """
-
         with ThreadPoolExecutor(max_workers=self._max_workers) as executor:
             for item in self._files_info.values():
                 if self._stop_event.is_set():
@@ -241,29 +161,11 @@ class Downloader:
 
     @staticmethod
     def _create_dirs(dirname: str) -> None:
-        """
-        _create_dirs
-
-        Creates a directory and its subdirectories recursively if they don't exist.
-
-        :param dirname: name of the directory to be created.
-        :return:
-        """
-
         makedirs(dirname, exist_ok = True)
 
 
     @staticmethod
     def _remove_dir(dirname: str) -> None:
-        """
-        _remove_dir
-
-        Removes a directory if it's empty ignoring any throw.
-
-        :param dirname: name of the directory to be created.
-        :return:
-        """
-
         try:
             rmdir(dirname)
         except:
@@ -271,15 +173,6 @@ class Downloader:
 
 
     def _download_content(self, file_info: dict[str, str]) -> None:
-        """
-        _download_content
-
-        Requests the contents of the file and writes it.
-
-        :param file_info: a dictionary with information about a file to be downloaded.
-        :return:
-        """
-
         filepath: str = path.join(file_info["path"], file_info["filename"])
 
         if self._should_skip_download(filepath):
@@ -317,15 +210,6 @@ class Downloader:
 
     @staticmethod
     def _should_skip_download(filepath: str) -> bool:
-        """
-        _should_skip_download
-
-        Checks if a file already exists and has non-zero size.
-
-        :param filepath: filepath.
-        :return: True if download should be skipped, False otherwise.
-        """
-
         if path.exists(filepath) and path.getsize(filepath) > 0:
             _print(f"{filepath} already exist, skipping.{NEW_LINE}")
             return True
@@ -340,19 +224,6 @@ class Downloader:
         headers: dict[str, str],
         part_size: int,
     ) -> str | None:
-        """
-        _perform_download
-
-        Executes the HTTP GET request, processes file chunks, and tracks progress.
-
-        :param file_info: a dictionary containing file details.
-        :param url: the file download URL.
-        :param tmp_file: temporary file path for partial downloads.
-        :param headers: request headers.
-        :param part_size: the current partial file size.
-        :return: the total file size (if available).
-        """
-
         if self._stop_event.is_set():
             return
 
@@ -399,16 +270,6 @@ class Downloader:
 
     @staticmethod
     def _is_valid_response(status_code: int, part_size: int) -> bool:
-        """
-        _is_valid_response
-
-        Validates HTTP status code based on partial download state.
-
-        :param status_code: the HTTP status code.
-        :param part_size: the current partial file size.
-        :return: True if status code is acceptable, False otherwise.
-        """
-
         if status_code in (403, 404, 405, 500):
             return False
         if part_size == 0:
@@ -420,16 +281,6 @@ class Downloader:
 
     @staticmethod
     def _extract_file_size(headers: CaseInsensitiveDict[str], part_size: int) -> str | None:
-        """
-        _extract_file_size
-
-        Retrieves the file size from HTTP headers.
-
-        :param headers: the HTTP response headers.
-        :param part_size: the current partial file size.
-        :return: the total file size as a string, or None if unavailable.
-        """
-
         content_length: str | None = headers.get("Content-Length")
         content_range: str | None = headers.get("Content-Range")
         has_size: str | None = (
@@ -449,19 +300,6 @@ class Downloader:
         total_size: float,
         filename: str
     ) -> None:
-        """
-        _write_chunks
-
-        Iterates over download chunks and writes them to disk, updating progress.
-
-        :param chunks: a generator of byte chunks.
-        :param tmp_file: temporary file path.
-        :param part_size: number of bytes already downloaded.
-        :param total_size: total file size in bytes.
-        :param filename: the file's name.
-        :return:
-        """
-
         start_time: float = perf_counter()
 
         with open(tmp_file, "ab") as f:
@@ -482,20 +320,6 @@ class Downloader:
         total_size: float,
         start_time: float
     ) -> None:
-        """
-        _update_progress
-
-        Calculates and displays download progress and transfer rate.
-
-        :param filename: the name of the file being downloaded.
-        :param part_size: initial file size in bytes.
-        :param i: current iteration number.
-        :param chunk: the downloaded byte chunk.
-        :param total_size: total file size.
-        :param start_time: download start time.
-        :return:
-        """
-
         progress: float = (part_size + (i * len(chunk))) / total_size * 100
         rate: float = (i * len(chunk)) / (perf_counter() - start_time)
 
@@ -521,17 +345,6 @@ class Downloader:
 
     @staticmethod
     def _finalize_download(file_info: dict[str, str], tmp_file: str, has_size: str) -> None:
-        """
-        _finalize_download
-
-        Verifies the final file size and moves the temporary file to its destination.
-
-        :param file_info: a dictionary containing file details.
-        :param tmp_file: temporary file path.
-        :param has_size: expected file size.
-        :return:
-        """
-
         if path.getsize(tmp_file) == int(has_size):
             _print(
                 f"{TERMINAL_CLEAR_LINE}"
@@ -548,18 +361,12 @@ class Downloader:
         Registers file information into the internal files info dictionary
         (with sequential index, path, filename and download url).
 
-        :param file_index: an itertools.count object used to sequentially index discovered files.
-                           Acts as a mutable counter local to the parsing thread context.
-                           Should not be modified outside this function.
-        :param filepath: absolute or relative path to the file on the local filesystem.
-        :param file_url: remote URL link for downloading the file.
-        :return:
+        GF_FILTER: optional env var to filter files by name (case-insensitive substring match).
+        Example: GF_FILTER=1080p  -> only downloads files whose name contains "1080p"
+        Example: GF_FILTER=.srt   -> only downloads subtitle files
+        Leave unset or empty to download everything (default behaviour).
         """
 
-        # GF_FILTER: optional env var to filter files by name (case-insensitive substring match).
-        # Example: GF_FILTER=1080p  -> only downloads files whose name contains "1080p"
-        # Example: GF_FILTER=.srt   -> only downloads subtitle files
-        # Leave unset or empty to download everything (default behaviour).
         _filter: str = _os.getenv("GF_FILTER", "").lower()
         if _filter and _filter not in path.basename(filepath).lower():
             return
@@ -578,22 +385,6 @@ class Downloader:
         child_name: str,
         is_dir: bool = False,
     ) -> str:
-        """
-        _resolve_naming_collision
-
-        Ensures unique file or directory paths by checking and updating a naming collision
-        tracker. If a collision is detected, appends a numeric suffix to the name to
-        avoid overwriting existing paths.
-
-        :param pathing_count: dictionary used to track the number of naming collisions
-                              for each path encountered during traversal.
-        :param absolute_parent_dir: absolute path to the parent directory where the child
-                                    (file or directory) will be created.
-        :param child_name: original name of the file or directory.
-        :param is_dir: boolean flag indicating whether the child is a directory, defaults to False.
-        :return: a unique filepath string with a numeric suffix appended if needed.
-        """
-
         filepath: str = path.join(absolute_parent_dir, child_name)
 
         if filepath in pathing_count:
@@ -621,24 +412,6 @@ class Downloader:
         pathing_count: dict[str, int] | None = None,
         file_index: count = count(start=0, step=1)
     ) -> None:
-        """
-        _build_content_tree_structure
-
-        Recursively traverses a remote content structure and builds a corresponding
-        local directory tree (handling naming collisions), while registering files url.
-
-        :param parent_dir: absolute path to the parent directory where the current content
-                           directory or file should be created.
-        :param content_id: content identifier.
-        :param password: optional password to access protected content.
-        :param pathing_count: pointer-like dictionary used internally to track naming collisions
-                              for file and directory paths. Should not be modified outside this function.
-        :param file_index: an itertools.count object used to sequentially index discovered files.
-                           Acts as a mutable counter local to the parsing thread context.
-                           Should not be modified outside this function.
-        :return:
-        """
-
         url: str = f"https://api.gofile.io/contents/{content_id}?cache=true&sortField=createTime&sortDirection=1"
 
         if not pathing_count:
@@ -680,16 +453,11 @@ class Downloader:
         folder_name: str = data["name"]
         absolute_path: str = self._resolve_naming_collision(pathing_count, parent_dir, folder_name)
 
-        # If the content directory (the root directory) directory isn't named the same as the content_id,
-        # use the content_id as a name for the content directory.
-        #
-        # Also do not use the default root directory named as "root" created by default.
         if path.basename(parent_dir) == content_id:
             absolute_path = parent_dir
 
         self._create_dirs(absolute_path)
 
-        # Checks if there is any children (files and directories) and handle them
         for child in data["children"].values():
             if child["type"] == "folder":
                 self._build_content_tree_structure(absolute_path, child["id"], password, pathing_count, file_index)
@@ -700,19 +468,10 @@ class Downloader:
 
 
     def _print_list_files(self) -> None:
-        """
-        _print_list_files
-
-        Helper function to display a list of all files for selection.
-
-        :return:
-        """
-
         MAX_FILENAME_CHARACTERS: int = 100
         width: int = max(len(f"[{v}] -> ") for v in self._files_info.keys())
 
         for (k, v) in self._files_info.items():
-            # Trim the filepath if it's too long
             filepath: str = path.join(v["path"], v["filename"])
             filepath = f"...{filepath[-MAX_FILENAME_CHARACTERS:]}" \
                 if len(filepath) > MAX_FILENAME_CHARACTERS \
@@ -727,18 +486,8 @@ class Downloader:
 
 
     def _do_interactive(self, content_dir: str) -> None:
-        """
-        _do_interactive
-
-        Performs interactive file selection for download.
-
-        :param content_dir: Content root directory.
-        :return:
-        """
-
         self._print_list_files()
 
-        # Ensure only valid index strings are stored.
         input_list: set[str] = set(input(
             f"Files to download (Ex: 1 3 7) | or leave empty to download them all"
             f"{NEW_LINE}"
@@ -758,30 +507,15 @@ class Downloader:
             del self._files_info[key]
 
 
-
 class Manager:
     def __init__(self, url_or_file: str, password: str | None = None) -> None:
-        """
-        Manager
-
-        Manager class to handle individual download tasks.
-
-        :url_or_file: This may be an existent text file or url.
-        :password: Password if the content is protected.
-        :return:
-        """
-
         root_dir: str | None = getenv("GF_DOWNLOAD_DIR")
 
-        # Defaults to 5 concurrent downloads
         self._max_workers: int = int(getenv("GF_MAX_CONCURRENT_DOWNLOADS", 5))
-        # Defaults to 5 retries
         self._number_retries: int = int(getenv("GF_MAX_RETRIES", 5))
-        # Connection and read timeout, defaults to 15 seconds
         self._timeout: float = float(getenv("GF_TIMEOUT", 15.0))
         self._user_agent: str | None = getenv("GF_USERAGENT")
         self._interactive: bool = getenv("GF_INTERACTIVE") == "1"
-        # The number of bytes it should read into memory
         self._chunk_size: int = int(getenv("GF_CHUNK_SIZE", 2097152))
 
         self._password: str | None = password
@@ -802,14 +536,6 @@ class Manager:
 
 
     def _parse_url_or_file(self) -> None:
-        """
-        _parse_url_or_file
-
-        Parses a file or a url for possible links.
-
-        :return:
-        """
-
         if not (path.exists(self._url_or_file) and path.isfile(self._url_or_file)):
             downloader: Downloader = Downloader(
                 self._root_dir,
@@ -831,8 +557,6 @@ class Manager:
         with open(self._url_or_file, "r") as f:
             lines: list[str] = f.readlines()
 
-        # I think it's better to limit this one here, the api may get angry if we starve it.
-        # We may make this a tunable in the future, but for now let it be hardcoded.
         max_workers: int = self._max_workers if self._max_workers <= 10 else 10
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -846,7 +570,7 @@ class Manager:
                     if len(line_splitted) > 1 else self._password
                 downloader: Downloader = Downloader(
                     self._root_dir,
-                    False, # Disable interactive download when downloading a batch from text file.
+                    False,
                     self._max_workers,
                     self._number_retries,
                     self._timeout,
@@ -861,36 +585,19 @@ class Manager:
 
 
     def run(self) -> None:
-        """
-        run
-
-        This method starts the download process after the creation of the Downloader object.
-
-        :return:
-        """
-
         signal(SIGINT, self._handle_sigint)
         _print(f"Starting, please wait...{NEW_LINE}")
         self._set_account_access_token(getenv("GF_TOKEN"))
         self._parse_url_or_file()
 
-        # Auto-move all downloaded files to root dir and clean up folders
-        # Can be disabled by setting GF_NO_CLEANUP=1
+        # Auto-move downloaded files to /kaggle/working and remove content folder
+        # Set GF_NO_CLEANUP=1 to disable
         if _os.getenv("GF_NO_CLEANUP", "0") != "1":
             content_id = self._url_or_file.split("/")[-1]
             cleanup_move_files(self._root_dir, content_id)
 
 
     def _set_account_access_token(self, token: str | None = None) -> None:
-        """
-        _set_account_access_token
-
-        Get a new access token for the account created or use the token provided for an already existent account.
-
-        :param token: token to be used accross connections if available.
-        :return:
-        """
-
         if token:
             self._session.cookies.set("Cookie", f"accountToken={token}")
             self._session.headers.update({"Authorization": f"Bearer {token}"})
@@ -924,32 +631,11 @@ class Manager:
 
 
     def _stop(self) -> None:
-        """
-        _stop
-
-        Stops all work from continuing.
-
-        :return:
-        """
-
         _print(f"{TERMINAL_CLEAR_LINE}Stopping, please wait...{NEW_LINE}")
         self._stop_event.set()
 
 
     def _handle_sigint(self, _: int, __: FrameType | None) -> None:
-        """
-        _handle_sigint
-
-        Signal handler triggered when a SIGINT (when pressing CTRL-C) is received.
-        Issues the stop event so that the running tasks can close gracefully,
-        ignoring tasks that didn't start yet.
-
-        :param signum:  Signal number received (for this callback usually SIGINT).
-        :param frame:   FrameType object representing the current stack frame
-                        where the received signal was caught.
-        :return:
-        """
-
         if not self._stop_event.is_set():
             self._stop()
             signal(SIGINT, SIG_IGN)
@@ -968,7 +654,6 @@ if __name__ == "__main__":
 
         manager: Manager = Manager(url_or_file=url_or_file, password=password)
 
-        # Run
         manager.run()
     else:
         die(f"Usage:"
