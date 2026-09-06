@@ -152,11 +152,21 @@ class Downloader:
 
     def _threaded_downloads(self) -> None:
         with ThreadPoolExecutor(max_workers=self._max_workers) as executor:
+            futures = []
             for item in self._files_info.values():
                 if self._stop_event.is_set():
                     return
 
-                executor.submit(self._download_content, item)
+                futures.append(executor.submit(self._download_content, item))
+
+            # Without this, exceptions raised inside worker threads (e.g. a
+            # missing directory, permission error, etc.) are silently
+            # swallowed and the whole run just exits with no output at all.
+            for fut in futures:
+                try:
+                    fut.result()
+                except Exception as e:
+                    _print(f"[error] download thread failed: {e!r}{NEW_LINE}")
 
 
     @staticmethod
@@ -445,6 +455,12 @@ class Downloader:
             return
 
         if data["type"] != "folder":
+            # A direct link to a single file: parent_dir must exist before we
+            # register the file, otherwise the download thread will fail
+            # later trying to open a file inside a nonexistent directory.
+            # (Previously missing here, unlike the folder branch below —
+            # caused single-file links to fail silently with exit code 0.)
+            self._create_dirs(parent_dir)
             filepath: str = self._resolve_naming_collision(pathing_count, parent_dir, data["name"])
 
             self._register_file(file_index, filepath, data["link"])
